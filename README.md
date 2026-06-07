@@ -10,7 +10,7 @@ Identifies the two vessels that experienced the closest physical proximity (coll
 |------|----------------|
 | Docker | 20.10 |
 | Docker Compose | 2.x |
-| RAM (host) | 8 GB recommended |
+| RAM (host) | 10 GB recommended |
 
 ---
 
@@ -24,7 +24,7 @@ Identifies the two vessels that experienced the closest physical proximity (coll
 
 2. Place **all 31 files** inside the `data/` directory:
    ```
-   ais-collision-detection/
+   BDA/
    └── data/
        ├── aisdk-2021-12-01.csv
        ├── aisdk-2021-12-02.csv
@@ -36,42 +36,50 @@ Identifies the two vessels that experienced the closest physical proximity (coll
 
 ## Build and run
 
-### Option A — Docker Compose (recommended)
+### Option A — Pull from Docker Hub (fastest)
+
+A pre-built image is available on Docker Hub:
 
 ```bash
-# Clone / navigate to project root
-cd ais-collision-detection
+docker pull jonuxs/ais-collision-detection:latest
+```
 
-# Build image and start container
+Run it:
+
+```bash
+docker run --rm \
+  --memory=10g \
+  -e JAVA_TOOL_OPTIONS="-Xmx6g" \
+  -e DATA_PATH=/data \
+  -e OUTPUT_PATH=/output \
+  -v "$(pwd)/data":/data:ro \
+  -v "$(pwd)/output":/output \
+  jonuxs/ais-collision-detection:latest
+```
+
+---
+
+### Option B — Docker Compose (recommended for local builds)
+
+```bash
+# 1. Clone / navigate to project root
+cd BDA
+
+# 2. Build the image and start the container
 docker compose up --build
 
-# Results appear in ./output/ when done
+# Results appear in ./output/ when complete
+
+# To stop and remove the container afterwards:
+docker compose down
 ```
 
-### Option B — Docker CLI
+> **Note:** Always run `docker compose down` before re-running to ensure the
+> container is fully recreated from the latest image:
+> ```bash
+> docker compose down && docker compose up --build
+> ```
 
-```bash
-# Build
-docker build -t ais-collision-detection:latest .
-
-# Run  (replace $(pwd) with absolute paths on Windows)
-docker run --rm \
-  -v "$(pwd)/data":/data:ro \
-  -v "$(pwd)/output":/output \
-  -e JAVA_OPTS="-Xmx6g -Xms2g" \
-  ais-collision-detection:latest
-```
-
-### Option C — Using a pre-built image from Docker Hub
-
-```bash
-docker pull <your-dockerhub-username>/ais-collision-detection:latest
-
-docker run --rm \
-  -v "$(pwd)/data":/data:ro \
-  -v "$(pwd)/output":/output \
-  <your-dockerhub-username>/ais-collision-detection:latest
-```
 
 ---
 
@@ -81,33 +89,49 @@ After the container finishes, three files appear in `./output/`:
 
 | File | Description |
 |------|-------------|
-| `collision_result.json` | Machine-readable summary: MMSI numbers, vessel names, timestamp, coordinates, distance |
+| `collision_result.json` | MMSI numbers, vessel names, timestamp, coordinates, closest-approach distance |
 | `trajectory_plot.png` | Static two-panel figure: geographic tracks + SOG time series (±10 min) |
 | `trajectory_map.html` | Interactive Folium map — open in any browser |
 
 ---
 
+## Results
+
+| Field | Value |
+|-------|-------|
+| Vessel 1 | **KARIN HOEJ** (MMSI 219021240) |
+| Vessel 2 | **MV SCOT CARRIER** (MMSI 232018267) |
+| Timestamp | 2021-12-13 02:27:29 UTC |
+| Latitude | 55.223079° N |
+| Longitude | 14.243707° E |
+| Closest approach | ~4.1 m |
+
+---
+
 ## Configuration
 
-Override defaults via environment variables:
+Environment variables accepted by the container:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATA_PATH` | `/data` | Directory of AIS CSV files |
-| `OUTPUT_PATH` | `/output` | Output directory |
-| `JAVA_OPTS` | `-Xmx4g -Xms1g` | JVM heap settings |
+| `DATA_PATH` | `/data` | Directory containing AIS CSV files |
+| `OUTPUT_PATH` | `/output` | Directory where results are written |
+| `JAVA_TOOL_OPTIONS` | `"-Xmx6g"` | JVM heap limit (set before JVM launch) |
+| `TARGET_YEAR` | `2021` | Filter to this year (0 = any) |
+| `TARGET_MONTH` | `12` | Filter to this month |
+| `LOAD_PARTITIONS` | `16` | Spark partition count after CSV load |
 
 ---
 
 ## Project structure
 
 ```
-ais-collision-detection/
+BDA/
 ├── src/
-│   ├── main.py                # Pipeline entry point
-│   ├── preprocessing.py       # Data loading, cleaning, filtering
-│   ├── collision_detection.py # Grid-bucketed spatial self-join
-│   └── visualization.py      # Matplotlib + Folium plots
+│   ├── main.py                # Pipeline entry point (3-phase architecture)
+│   ├── preprocessing.py       # CSV load, geographic + quality filtering
+│   ├── collision_detection.py # Bucketed spatial-temporal self-join
+│   └── visualization.py       # Matplotlib + Folium trajectory plots
 ├── data/                      # Place AIS CSV files here (gitignored)
 ├── output/                    # Results written here (gitignored)
 ├── requirements.txt
@@ -118,20 +142,3 @@ ais-collision-detection/
 ```
 
 ---
-
-## Push to Docker Hub
-
-```bash
-docker build -t <username>/ais-collision-detection:latest .
-docker push <username>/ais-collision-detection:latest
-```
-
----
-
-## Running tests locally (without Docker)
-
-```bash
-pip install -r requirements.txt
-cd src
-DATA_PATH=../data OUTPUT_PATH=../output python main.py
-```
