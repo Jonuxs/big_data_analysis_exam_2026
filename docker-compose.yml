@@ -1,0 +1,35 @@
+services:
+  ais-collision:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ais-collision-detection:latest
+    container_name: ais-collision-detection
+    environment:
+      DATA_PATH: /data
+      OUTPUT_PATH: /output
+      # JAVA_TOOL_OPTIONS is processed by the JVM itself at launch (before any
+      # launcher script runs), so it works regardless of how Python starts the JVM.
+      # Only -Xmx is set here — adding -Xms alongside SPARK_DRIVER_MEMORY causes
+      # a JVM startup error ("Initial heap size larger than maximum heap size")
+      # because spark-class also injects its own -Xms derived from the memory
+      # setting, producing a conflicting pair.
+      JAVA_TOOL_OPTIONS: "-Xmx6g"
+      # Assignment requires December 2021 data. Set to 0 only for local testing
+      # with a different year's files.
+      TARGET_YEAR: "2021"
+      TARGET_MONTH: "12"
+      # Number of partitions after coalescing CSV load (caps Python UDF workers)
+      LOAD_PARTITIONS: "16"
+    volumes:
+      # Mount your local data and output directories here.
+      # Place December 2021 AIS CSV files inside ./data/ before running.
+      - ./data:/data:ro
+      - ./output:/output
+    # 6 g JVM heap + ~1 g non-heap (Metaspace / threads) + ~500 MB Python
+    # + ~500 MB OS = ~8 g peak; 10 g limit gives comfortable headroom.
+    # Increase further if you still see OOM (e.g. on machines with ≥16 g RAM).
+    deploy:
+      resources:
+        limits:
+          memory: 10g

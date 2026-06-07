@@ -1,0 +1,10 @@
+{
+  "mmsi1": 219021240,
+  "mmsi2": 232018267,
+  "name1": "KARIN HOEJ",
+  "name2": "MV SCOT CARRIER",
+  "collision_ts": "2021-12-13T02:27:29Z",
+  "collision_lat": 55.2230795,
+  "collision_lon": 14.2437065,
+  "min_distance_m": 4.075970264224345
+}
